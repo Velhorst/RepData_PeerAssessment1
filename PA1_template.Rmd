@@ -1,25 +1,190 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: "RLC Velhorst"
+date: "25-11-2019"
 output: 
   html_document:
     keep_md: true
 ---
 
+# Reproducible Research Project Report Part 1
+This is document is created to complete the course on Coursera: Reproducible Research by John Hopkins University. 
+It is part of the Peer-graded Assignments. 
+This report addresses the first assignment of the course, which is given in week 2.
+
+## Overview
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+The data for this assignment can be downloaded from the course web site:
+
+* Dataset: [Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
+
+This report presents the investigation of this dataset. The report shows:
+
+* Loading and preprocessing the data.
+* The mean total number of steps taken per day.
+* The average daily activity pattern.
+* The consequence of Missing values.
+* THe differences in activity patterns between weekdays and weekends
+
 
 ## Loading and preprocessing the data
+```{r}
+# Load libraies
+library(ggplot2)
+library(dplyr)
+# set local timezone to english, otherwise weekdays will not be printed in English
+Sys.setlocale("LC_TIME","English")
 
+# Unzip data
+fp_data <- "activity.zip"
+unzip(fp_data)
+# Load CSV
+activity <- read.csv("activity.csv")
 
+# Convert the variable interval to a factor variable
+activity$interval <- as.factor(activity$interval)
+
+```
+
+Show the structure and the summary of the dataset. 
+
+```{r}
+str(activity)
+summary(activity)
+```
 
 ## What is mean total number of steps taken per day?
+```{r}
+# NA values are not considered
+activity_nona = na.omit(activity)
 
+# Sum total number of steps per day
+stepsperday <- aggregate(activity_nona$steps, by=list(date=activity_nona$date), FUN=sum)
+names(stepsperday)[2] <- "totalsteps"
 
+# Compute mean and median
+mean_steps = mean(stepsperday$totalsteps)
+med_steps = median(stepsperday$totalsteps)
+
+# Plot
+sp <- ggplot(data=stepsperday, aes(x=totalsteps)) + geom_histogram(binwidth = 1000)
+sp +  
+  geom_vline(aes(xintercept=med_steps,color="median"),size=1) + 
+  geom_vline(aes(xintercept=mean_steps,color="mean"), linetype="dashed",size=1) + 
+  scale_color_manual(name = "statistics", values = c(median = "blue", mean = "red")) + 
+  ggtitle("histogram of the total steps per day") + 
+  xlab("Total steps per day")
+```
+
+The mean of the total number of steps during a day is `r sprintf("%.1f", mean_steps)`.   
+The median of the total number of steps during a day is `r med_steps`.   
 
 ## What is the average daily activity pattern?
+```{r}
+# NA values are not considered
+activity_nona = na.omit(activity)
 
+# Average number of steps per day
+stepsperinterval <- aggregate(activity_nona$steps, by=list(interval=activity_nona$interval), FUN=mean)
+names(stepsperinterval)[2] <- "averagesteps"
 
+# Compute max stepsperinterval
+max_steps <- max(stepsperinterval$averagesteps)
+ix_max_interval <- stepsperinterval$averagesteps==max_steps
+max_interval <- stepsperinterval[ix_max_interval,]["interval"]
+
+# Plot
+sp <- ggplot(data=stepsperinterval, aes(x=interval, y=averagesteps, group=1)) + geom_line()
+sp+ scale_x_discrete(breaks=seq(0,2400,200))+ 
+  ggtitle("Average daily activity pattern") + 
+  ylab("Average number of steps during interval")
+
+```
+
+The average daily pattern shows, as expected, almost no activity during the noctural hours. From ~ 6.00 AM the activity increases, to peak between 8.00 AM and 9.00 AM, likely the commute to work. During the day smaller peaks around lunch time (12.00 AM), around 16.00 and 18.30. Presumably times that one travels back from work. From 08.00 PM to 10.00 the activity drops again towards zero.   
+The interval `r max_interval$interval` is the 5-minute interval which, on average across all the days in the dataset, contains the maximum number of steps.
 
 ## Imputing missing values
 
+The total number of missing values in the dataset is: `r dim(activity)[1] - dim(activity_nona)[1]`. This corresponds to `r round(100*(dim(activity)[1] - dim(activity_nona)[1]) / dim(activity)[1],1)`% of the data. 
+To fill the missing values, the average of the 5-minutes interval is used. 
 
+```{r}
+steps_miss_ind <- is.na(activity$steps)
+int_miss_ind <- activity[steps_miss_ind,'interval']
+fill = vector(length=length(int_miss_ind))
+for (i in 1:length(int_miss_ind)) {
+  fill[i] = as.integer(stepsperinterval[stepsperinterval$interval==int_miss_ind[i],'averagesteps'])
+}
+activity_filledna <- activity
+activity_filledna[steps_miss_ind,'steps'] <- fill
+```
+
+
+```{r}
+# Plot the average daily pattern
+# Sum total number of steps per day
+stepsperday2 <- aggregate(activity_filledna$steps, by=list(date=activity_filledna$date), FUN=sum)
+names(stepsperday2)[2] <- "totalsteps"
+
+# Compute mean and median
+mean_steps2 = mean(stepsperday2$totalsteps)
+med_steps2 = median(stepsperday2$totalsteps)
+
+# Plot
+sp <- ggplot(data=stepsperday2, aes(x=totalsteps)) + geom_histogram(binwidth = 1000)
+sp +  
+  geom_vline(aes(xintercept=med_steps2,color="median"),size=1) + 
+  geom_vline(aes(xintercept=mean_steps2,color="mean"), linetype="dashed",size=1) + 
+  scale_color_manual(name = "statistics", values = c(median = "blue", mean = "red"))+ 
+  ggtitle("histogram of the total steps per day without missing values") + 
+  xlab("Total steps per day")
+```
+
+By using the 5-minute average to impute missing values, the mean and median are slightly affected and show a limited decrease.  
+
+The new mean of the total number of steps during a day is `r sprintf("%.1f", mean_steps2)`.   
+The new median of the total number of steps during a day is `r med_steps2`.
+
+Statistic | with missing values | with  missing values imputed
+------------- | -------------- | -------------
+mean | `r sprintf("%.1f", mean_steps)` | `r sprintf("%.1f", mean_steps2)`
+median | `r med_steps` | `r med_steps2`
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r}
+# Differ between weekdays and weekend
+
+# Check if date is in weekend
+days <- weekdays(as.Date(activity$date))
+weekenddays = days == "Saturday" | days == "Sunday"
+# create new factor variable which is 'weekend' or 'weekday'
+week <- vector(mode="character",length=dim(activity)[1])
+week[weekenddays] <- "weekend"
+week[!weekenddays] <- "weekday"
+# add new factor variable
+activity_week <- mutate(activity_filledna,week=factor(week))
+```
+
+
+```{r}
+# Plot average daily activity pattern during the week and weekend 
+
+# Average number of steps per day
+stepsperinterval2 <- aggregate(activity_week$steps, by=list(interval=activity_week$interval, week = activity_week$week), FUN=mean)
+names(stepsperinterval2)[3] <- "averagesteps"
+
+
+# Plot
+sp <- ggplot(data=stepsperinterval2, aes(x=interval, y=averagesteps, group=1)) + geom_line()
+sp + facet_grid(week ~ .)  + scale_x_discrete(breaks=seq(0,2400,200)) +
+  ggtitle("Average daily activity pattern during the week and weekend") + 
+  ylab("Average number of steps during interval")
+
+```
+
+
+
